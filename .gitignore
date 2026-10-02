@@ -1,0 +1,15 @@
+.venv/
+**/data/raw/
+_site/
+.quarto/
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
+
+# Documentos internos del grupo (viven fuera del repo)
+CLAUDE.md
+GUIA_PROYECTO.md
+mapa-mental.mermaid
+
+/.quarto/
+**/*.quarto_ipynb

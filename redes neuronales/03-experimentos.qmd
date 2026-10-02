@@ -1,0 +1,5 @@
+---
+title: "Experimentos"
+---
+
+Sección pendiente: comparación de configuraciones.
