@@ -1,0 +1,5 @@
+---
+title: "Análisis exploratorio"
+---
+
+Sección pendiente: carga, limpieza y gráficos de los datos.

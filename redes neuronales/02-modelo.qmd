@@ -1,0 +1,5 @@
+---
+title: "Modelo"
+---
+
+Sección pendiente: red neuronal en PyTorch.

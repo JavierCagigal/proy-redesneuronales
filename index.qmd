@@ -1,0 +1,9 @@
+---
+title: "Nutrición y salud con IA"
+---
+
+**Grupo 1:** Alejandro, Miguel y Javier.
+
+**Tema:** nutrición y salud. En este sitio publicamos los trabajos del curso.
+
+**Trabajo 1:** predicción del Nutri-Score de un producto con una red neuronal, a partir de sus valores nutricionales por 100 g (datos de Open Food Facts).
