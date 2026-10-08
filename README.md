@@ -50,7 +50,15 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 ### 3. VS Code
 
-Abre la carpeta del repo en VS Code y acepta instalar las extensiones recomendadas (Python, Jupyter y Quarto). Cuando te pida un intérprete de Python, elige el de `.venv`.
+Abre la carpeta del repo en VS Code y acepta instalar las extensiones recomendadas (Python, Jupyter y Quarto).
+
+Después elige el Python del entorno. VS Code no siempre lo pregunta, así que hazlo a mano:
+
+1. `Cmd + Shift + P` (Windows: `Ctrl + Shift + P`).
+2. Escribe **Python: Select Interpreter**.
+3. Elige el de `.venv`: `./.venv/bin/python` en macOS y Linux, `.venv\Scripts\python.exe` en Windows.
+
+Si los `import` (por ejemplo `numpy`) salen subrayados en rojo, VS Code está usando otro Python: repite estos pasos.
 
 ### 4. Comprobar
 
