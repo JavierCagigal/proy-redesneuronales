@@ -2,4 +2,137 @@
 title: "Modelo"
 ---
 
-Sección pendiente: red neuronal en PyTorch.
+## Preparación de los datos
+
+En esta primera parte se preparan los datos que utilizará la red neuronal. El conjunto se divide en entrenamiento, validación y test. El entrenamiento se utiliza para ajustar los pesos de la red, la validación para comprobar su comportamiento y tomar decisiones sobre la configuración, y el test queda reservado para la evaluación final del proyecto.
+
+```{python}
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+from sklearn.metrics import confusion_matrix
+
+from src.red import preparar_datos, crear_red, entrenar, evaluar
+```
+
+Este bloque importa las librerías que utilizaremos para trabajar con los datos, representar gráficos y evaluar el modelo, además de las funciones ya definidas en `src/red.py`.
+
+```{python}
+X_ent, y_ent, X_val, y_val, X_test, y_test = preparar_datos(
+    "data/processed/productos_limpios.csv"
+)
+
+print("Entrenamiento:", len(X_ent))
+print("Validación:", len(X_val))
+print("Test:", len(X_test))
+```
+
+Los datos quedan divididos en 4.447 productos para entrenamiento, 953 para validación y 954 para test. La división se realiza de forma estratificada para conservar aproximadamente la misma proporción de las cinco clases en cada conjunto.
+
+Las variables nutricionales también se escalan para trabajar con magnitudes comparables. El escalador se ajusta únicamente con los datos de entrenamiento. Si utilizara información de validación o test para calcular el escalado, se produciría una fuga de datos, ya que el modelo recibiría indirectamente información de conjuntos que debe considerar desconocidos.
+
+## Arquitectura de la red
+
+A continuación se crea la red neuronal que utilizaremos en esta página. La configuración de partida tiene dos capas ocultas de 64 neuronas cada una. La red recibe como entrada los ocho valores nutricionales de cada producto y genera cinco valores de salida, uno por cada categoría del Nutri-Score.
+
+```{python}
+red = crear_red(capas_ocultas=2, neuronas=64)
+
+red
+```
+
+Una neurona recibe varios valores de entrada, multiplica cada uno por un peso aprendido y añade un sesgo o `bias`. Una capa `Linear` agrupa varias de estas neuronas y realiza esta transformación sobre los datos que recibe.
+
+La red está formada por tres capas `Linear`. La primera recibe los 8 nutrientes de cada producto y los transforma en 64 valores, uno por cada neurona de la primera capa oculta. La segunda recibe esos 64 valores y genera otros 64, correspondientes a la segunda capa oculta.
+
+Entre las capas ocultas se utiliza la función de activación ReLU, que introduce no linealidad y permite a la red aprender relaciones más complejas. Sin estas activaciones, varias capas lineales consecutivas seguirían siendo equivalentes a una única transformación lineal.
+
+La última capa genera 5 puntuaciones, una por cada posible letra del Nutri-Score: `a`, `b`, `c`, `d` y `e`. Estas puntuaciones se denominan *logits*. No se aplica `Softmax` al final porque la función de pérdida `CrossEntropyLoss` trabaja directamente con estos valores y realiza internamente la transformación necesaria.
+
+## Entrenamiento
+
+Una vez creada la arquitectura, la red debe aprender a relacionar los ocho valores nutricionales de entrada con las cinco categorías del Nutri-Score. Para ello se entrena durante 30 épocas utilizando lotes de 64 productos y un *learning rate* de 0,001. Durante el entrenamiento se calcula también la pérdida sobre el conjunto de validación para comprobar cómo evoluciona el modelo con datos que no utiliza para ajustar sus pesos.
+
+```{python}
+historial = entrenar(
+    red,
+    X_ent,
+    y_ent,
+    X_val,
+    y_val,
+    batch_size=64,
+    lr=0.001,
+    epocas=30
+)
+
+historial.tail()
+```
+
+Una época corresponde a un recorrido completo por los 4.447 productos del conjunto de entrenamiento. Como se utiliza un `batch_size` de 64, los productos se procesan en lotes de 64 y la red actualiza sus parámetros después de cada lote.
+
+El aprendizaje sigue cuatro pasos. Primero, `zero_grad()` elimina los gradientes calculados en el lote anterior. Después, la red realiza las predicciones y se calcula la pérdida, que mide el error cometido. `backward()` calcula los gradientes que indican cómo ha contribuido cada parámetro al error. Finalmente, `step()` modifica los pesos para intentar reducirlo.
+
+El optimizador Adam utiliza esos gradientes para decidir cómo actualizar los parámetros. El *learning rate* de 0,001 determina el tamaño de esas actualizaciones. Un valor demasiado bajo haría que el aprendizaje fuera muy lento, mientras que uno demasiado alto podría hacer que el entrenamiento fuera inestable.
+
+Al final de las 30 épocas, la pérdida de entrenamiento es 0,557 y la de validación 0,618. La pérdida es menor en entrenamiento porque esos son los datos utilizados para ajustar los pesos de la red. La diferencia entre ambas es pequeña, lo que indica que el modelo generaliza razonablemente bien, aunque aparece un ligero sobreajuste. Las pequeñas oscilaciones entre épocas son normales, ya que los pesos se actualizan por lotes durante el entrenamiento.
+
+Para observar mejor cómo evoluciona el aprendizaje, representamos la pérdida de entrenamiento y la pérdida de validación a lo largo de las 30 épocas. Comparar ambas curvas permite comprobar si la red está aprendiendo y detectar posibles signos de sobreajuste.
+
+```{python}
+historial.plot(
+    x="epoca",
+    y=["perdida_ent", "perdida_val"]
+)
+
+plt.xlabel("Época")
+plt.ylabel("Pérdida")
+plt.title("Evolución de la pérdida")
+plt.show()
+```
+
+Las dos curvas de pérdida descienden de forma similar durante las 30 épocas, lo que indica que la red está aprendiendo tanto sobre los datos de entrenamiento como sobre datos que no utiliza para ajustar sus pesos. Al principio la pérdida está alrededor de 1,25 y desciende progresivamente hasta 0,557 en entrenamiento y 0,618 en validación.
+
+En las últimas épocas aparece una pequeña separación entre ambas curvas, con algunas oscilaciones en validación. Esto sugiere un ligero sobreajuste, aunque la diferencia sigue siendo reducida.
+
+## Evaluación en validación
+
+Una vez entrenada la red, evaluamos su rendimiento sobre el conjunto de validación. Estos datos no se han utilizado para ajustar los pesos del modelo, por lo que permiten comprobar hasta qué punto la red es capaz de generalizar a productos que no ha utilizado para aprender.
+
+```{python}
+accuracy, f1_macro, predicciones = evaluar(
+    red,
+    X_val,
+    y_val
+)
+
+print(f"Accuracy: {accuracy:.3f}")
+print(f"F1 macro: {f1_macro:.3f}")
+```
+
+El modelo obtiene una accuracy de 0,747, por lo que clasifica correctamente aproximadamente el 74,7 % de los productos del conjunto de validación.
+
+El F1 macro es 0,729. Esta métrica calcula el rendimiento de cada una de las cinco clases por separado y después realiza una media dando el mismo peso a todas. Resulta útil para comprobar que el rendimiento global no se debe únicamente a las clases con más productos.
+
+Para analizar en qué clases se equivoca el modelo, utilizamos una matriz de confusión. Las filas representan la categoría real de cada producto y las columnas la categoría predicha por la red. Los valores de la diagonal son los aciertos, mientras que los valores fuera de ella muestran entre qué letras se producen los errores.
+
+```{python}
+matriz = confusion_matrix(y_val, predicciones)
+
+sns.heatmap(
+    matriz,
+    annot=True,
+    fmt="d",
+    xticklabels=list("abcde"),
+    yticklabels=list("abcde")
+)
+
+plt.xlabel("Predicción")
+plt.ylabel("Valor real")
+plt.title("Matriz de confusión")
+plt.show()
+```
+
+La matriz de confusión muestra que el modelo acierta 712 de los 953 productos de validación. De los 241 errores, 188, aproximadamente un 78 %, se producen entre categorías vecinas. Esto resulta razonable porque las letras del Nutri-Score proceden de una puntuación continua que posteriormente se divide en distintos intervalos, por lo que los productos cercanos a los límites entre categorías pueden ser difíciles de distinguir.
+
+La clase más complicada es la `b`: de sus 143 productos, la red clasifica correctamente 54, mientras que confunde 49 con la categoría `a` y 39 con la `c`. Además de ser la clase con menos ejemplos, se encuentra entre dos categorías vecinas, lo que ayuda a explicar su peor rendimiento.
