@@ -2,4 +2,66 @@
 title: "Modelo"
 ---
 
-Sección pendiente: red neuronal en PyTorch.
+En esta sección construimos y entrenamos **una sola red neuronal**, con una configuración de partida: 2 capas ocultas, 64 neuronas por capa, batch size 64, learning rate 0,001 y 30 épocas. Aquí no comparamos nada; eso se hace en la sección de experimentos.
+
+## Preparación de los datos
+
+Importamos las librerías y las funciones de `src/red.py`, y llamamos a `preparar_datos`, que lee el CSV limpio y lo deja listo para PyTorch.
+
+```{python}
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
+from src.red import preparar_datos, crear_red, entrenar, evaluar
+
+X_ent, y_ent, X_val, y_val, X_test, y_test = preparar_datos("data/processed/productos_limpios.csv")
+print("Entrenamiento:", len(X_ent), "| Validación:", len(X_val), "| Test:", len(X_test))
+```
+
+Los 6.354 productos se reparten en tres conjuntos: 4.447 para entrenar (la red aprende de ellos), 953 para validación (comparar configuraciones mientras trabajamos) y 954 para test (la nota final, que no se toca hasta el final). La división es **estratificada**: cada conjunto mantiene la misma proporción de letras A a E, para que ninguno quede descompensado. Además, los datos se **escalan** con `StandardScaler`, porque las calorías llegan a 900 y la sal a 5, y esa diferencia de escala dificulta el aprendizaje. El escalador solo "ve" los datos de entrenamiento; si viera también validación o test, la red se beneficiaría de información que no debería tener (**fuga de datos**).
+
+## Arquitectura
+
+Creamos la red con `crear_red`.
+
+```{python}
+red = crear_red(capas_ocultas=2, neuronas=64)
+print(red)
+```
+
+La red recibe los 8 nutrientes y devuelve 5 puntuaciones, una por letra; la más alta es la predicción. Cada capa `Linear` combina todos sus números de entrada con unos pesos que se ajustan durante el entrenamiento, y cada **neurona** es una de esas combinaciones. Entre capas va una **ReLU**, que anula los valores negativos; sin ella, apilar capas equivaldría a una sola capa lineal y la red no podría aprender una fórmula por tramos como la del Nutri-Score. No añadimos `Softmax` al final porque la función de pérdida `CrossEntropyLoss` ya lo aplica por dentro.
+
+## Entrenamiento
+
+Entrenamos 30 épocas con el optimizador Adam y guardamos la pérdida de cada época.
+
+```{python}
+historial = entrenar(red, X_ent, y_ent, X_val, y_val, batch_size=64, lr=0.001)
+historial.plot(x="epoca", y=["perdida_ent", "perdida_val"])
+plt.xlabel("Época")
+plt.ylabel("Pérdida")
+plt.title("La pérdida baja en entrenamiento y en validación")
+plt.show()
+```
+
+Una **época** es una pasada completa por los datos de entrenamiento, y un **lote** es cada trozo de 64 productos. Con cada lote, el bucle de `entrenar` hace cuatro pasos: `zero_grad` borra los cálculos del lote anterior, se predice y se mide el error con la función de pérdida, `backward` calcula cómo cambiar cada peso para equivocarse menos y `step` los cambia un poco. **Adam** es la variante del descenso de gradiente que hace esos cambios, y el **learning rate** es el tamaño de cada paso. Las dos curvas bajan juntas: la pérdida termina en torno a 0,56 en entrenamiento y 0,62 en validación. El hueco es pequeño, así que hay un sobreajuste leve, es decir, la red conoce algo mejor los datos que ha visto que los nuevos.
+
+## Evaluación en validación
+
+Medimos la red con los datos de validación y dibujamos su matriz de confusión.
+
+```{python}
+accuracy, f1, predicciones = evaluar(red, X_val, y_val)
+print(f"Accuracy: {accuracy:.3f}  F1 macro: {f1:.3f}")
+
+matriz = confusion_matrix(y_val, predicciones)
+sns.heatmap(matriz, annot=True, fmt="d", cmap="Blues",
+            xticklabels=list("abcde"), yticklabels=list("abcde"))
+plt.xlabel("Letra predicha")
+plt.ylabel("Letra real")
+plt.title("La red confunde sobre todo letras vecinas")
+plt.show()
+```
+
+La **accuracy** es el porcentaje de productos acertados: 0,746. El **F1 macro** (0,728) calcula el acierto de cada letra y hace la media tratándolas por igual, así que penaliza que la red falle en una letra concreta aunque acierte en las demás. En la matriz, 189 de los 242 errores (un 78 %) son entre letras vecinas, como B con C o D con E: la letra sale de una puntuación continua cortada en tramos, y los productos cercanos a un corte son difíciles de clasificar. La letra más difícil es la **B**: acierta solo 54 de 143 y la confunde con la A (49) y con la C (39). Es la clase con menos productos y está entre dos vecinas.
