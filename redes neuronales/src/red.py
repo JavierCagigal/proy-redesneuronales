@@ -62,8 +62,6 @@ def preparar_datos(ruta):
     # 7. return X_ent, y_ent, X_val, y_val, X_test, y_test
     return X_ent, y_ent, X_val, y_val, X_test, y_test
 
-    pass
-
 
 def crear_red(capas_ocultas, neuronas):
     """Crea una red con `capas_ocultas` capas de `neuronas` neuronas.
@@ -95,8 +93,6 @@ def crear_red(capas_ocultas, neuronas):
     # 5. return nn.Sequential(*capas)   (el * "desempaqueta" la lista)
     return nn.Sequential(*capas)
 
-    pass
-
 
 def entrenar(red, X_ent, y_ent, X_val, y_val, batch_size, lr, epocas=30):
     """Entrena la red y devuelve una tabla con la pérdida de cada época.
@@ -127,12 +123,13 @@ def entrenar(red, X_ent, y_ent, X_val, y_val, batch_size, lr, epocas=30):
             perdida.backward()
             optimizador.step()
 
-    # 3. Al acabar cada época, dentro de "with torch.no_grad():" (medir no es entrenar),
-    #    añadir a historial un diccionario con:
-    #    - "epoca": epoca + 1
-    #    - "perdida_ent": funcion_perdida(red(X_ent), y_ent).item()
-    #    - "perdida_val": funcion_perdida(red(X_val), y_val).item()
-    with torch.no_grad():
+        # 3. Al acabar cada época, dentro de "with torch.no_grad():" (medir no es entrenar),
+        #    añadir a historial un diccionario con:
+        #    - "epoca": epoca + 1
+        #    - "perdida_ent": funcion_perdida(red(X_ent), y_ent).item()
+        #    - "perdida_val": funcion_perdida(red(X_val), y_val).item()
+        #    Va dentro del for de épocas: si no, solo se guardaría la última.
+        with torch.no_grad():
             historial.append({
                 "epoca": epoca + 1,
                 "perdida_ent": funcion_perdida(red(X_ent), y_ent).item(),
@@ -141,8 +138,6 @@ def entrenar(red, X_ent, y_ent, X_val, y_val, batch_size, lr, epocas=30):
 
     # 4. return pd.DataFrame(historial)
     return pd.DataFrame(historial)
-
-    pass
 
 
 def evaluar(red, X, y):
@@ -164,7 +159,6 @@ def evaluar(red, X, y):
 
     # 3. return accuracy, f1, predicciones
     return accuracy, f1, predicciones
-    pass
 
 
 # Comprobación rápida. Desde la carpeta "redes neuronales":
