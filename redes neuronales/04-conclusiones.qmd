@@ -103,6 +103,40 @@ La fórmula oficial del Nutri-Score tiene reglas especiales para las bebidas, lo
 - **Por qué:** en nuestros datos solo hay 255 bebidas, 88 grasas y 79 quesos, unos 420 de 6.354 productos (un 7 %). Para el 93 % restante la nueva variable siempre dice "general", así que no le aporta información útil a la red.
 - **Conclusión:** descartamos esta variable y nos quedamos con el modelo de 8 nutrientes.
 
+## Prueba extra: combinar los mejores valores
+
+En los experimentos cambiamos un parámetro cada vez. Las mejoras fueron 3 capas ocultas, 128 neuronas, un batch size de 16 y un learning rate de 0,01. Si juntamos esos valores en una sola red, ¿mejorará todavía más? Lo probamos partiendo de la red de 3 capas y añadiendo las mejoras poco a poco, siempre comparando en validación:
+
+```{python}
+from src.red import preparar_datos, crear_red, entrenar, evaluar
+
+X_ent, y_ent, X_val, y_val, X_test, y_test = preparar_datos("data/processed/productos_limpios.csv")
+
+combinaciones = [
+    {"capas": 3, "neuronas": 64,  "batch_size": 64, "lr": 0.001},  # la mejor de los experimentos
+    {"capas": 3, "neuronas": 128, "batch_size": 64, "lr": 0.001},
+    {"capas": 3, "neuronas": 64,  "batch_size": 64, "lr": 0.01},
+    {"capas": 3, "neuronas": 128, "batch_size": 16, "lr": 0.001},
+    {"capas": 3, "neuronas": 128, "batch_size": 16, "lr": 0.01},   # todos los "mejores" valores juntos
+]
+
+resultados = []
+for config in combinaciones:
+    red = crear_red(capas_ocultas=config["capas"], neuronas=config["neuronas"])
+    entrenar(red, X_ent, y_ent, X_val, y_val, batch_size=config["batch_size"], lr=config["lr"])
+    accuracy, f1, _ = evaluar(red, X_val, y_val)
+    fila = config.copy()
+    fila["accuracy_val"] = round(accuracy, 3)
+    fila["f1_val"] = round(f1, 3)
+    resultados.append(fila)
+
+pd.DataFrame(resultados)
+```
+
+- **Juntar todos los "mejores" valores sale peor:** la última red, con todas las mejoras a la vez, baja a un F1 de 0,721, por debajo incluso de la configuración de partida (0,728). Y solo con juntar 3 capas y un learning rate de 0,01 ya baja a 0,746.
+- **Por qué:** los parámetros no son independientes. Un learning rate de 0,01 va bien con la red de partida, pero con una red más grande y lotes de 16 (cuatro veces más ajustes por época) los pasos son demasiado grandes y el entrenamiento se vuelve inestable.
+- **La mejor combinación** (3 capas, 128 neuronas y lotes de 16) llega a 0,782, solo 0,008 más que la red de 3 capas. Con 953 productos de validación, esa diferencia equivale a acertar unos 8 productos más y entra dentro del azar, así que mantenemos como modelo final la red de 3 capas, que es más sencilla.
+
 ## Limitaciones y mejoras
 
 | Limitación | Qué haríamos |
@@ -110,11 +144,12 @@ La fórmula oficial del Nutri-Score tiene reglas especiales para las bebidas, lo
 | Falta el % de fruta, verdura y legumbres, que usa la fórmula real | Usar un dataset que lo incluya |
 | Perdimos un 27 % de productos por falta de fibra | Rellenar la fibra y comparar |
 | Batch 1024 y lr 0,0001 no tuvieron tiempo de aprender | Entrenarlos con más épocas |
-| Cambiamos un parámetro cada vez | Probar combinaciones de los mejores valores |
+| Las diferencias entre las mejores redes son muy pequeñas | Repetir cada prueba con varias semillas para medir el azar |
 
 ## Conclusión
 
 - **La red está justificada:** 78,8 % de acierto frente al 54 % del modelo lineal.
 - **Lo que más influye son las capas ocultas.**
 - **Learning rate y batch size**, con valores extremos, impiden aprender.
+- **Los mejores valores no se suman:** juntarlos todos empeora la red.
 - **Para mejorar** harían falta datos que no tenemos, como el porcentaje de fruta y verdura. Añadir el tipo de alimento no ayudó.
