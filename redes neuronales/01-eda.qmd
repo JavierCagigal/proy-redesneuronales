@@ -1,0 +1,188 @@
+---
+title: "Análisis exploratorio"
+---
+
+## Carga de los datos
+
+Cargamos el CSV de Open Food Facts con pandas.
+
+```{python}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+df = pd.read_csv("data/raw/openfoodfacts_nutrition_final_2025-12-10.csv")
+df.shape
+```
+
+Observamos los valores que hay en la tabla CSV sin limpiar y nos ponemos manos a la obra.
+
+Las primeras filas nos enseñan qué contiene cada columna.
+
+```{python}
+df.head()
+```
+
+De esta manera sabemos cómo es la tabla, qué valores queremos preservar y de cuáles prescindir, por ejemplo la cantidad de azúcares, grasas, sal, proteínas, etc.
+
+## Variable objetivo
+
+Contamos cuántos productos hay de cada letra del Nutri-Score.
+
+```{python}
+df["nutriscore_grade"].value_counts(dropna=False)
+```
+
+En este caso hay valores que no queremos, como unknown o NaN, por lo que nos quedamos solo con los productos que tienen una letra válida, de la a a la e.
+
+```{python}
+df = df[df["nutriscore_grade"].isin(["a", "b", "c", "d", "e"])]
+len(df)
+```
+
+Esta es la cantidad de productos con la que nos quedamos. Ahora toca limpiar los valores vacíos, los valores sin sentido (extremos que son imposibles, por ejemplo un producto de más de 900 kcal, imposible porque la propia grasa tiene 900 y no hay nada con más) y los productos repetidos.
+
+## Selección de columnas
+
+Usamos los ocho nutrientes por 100 g como variables explicativas y la letra como objetivo.
+
+```{python}
+nutrientes = [
+    "energy-kcal_100g", "fat_100g", "saturated-fat_100g", "carbohydrates_100g",
+    "sugars_100g", "fiber_100g", "proteins_100g", "salt_100g",
+]
+df = df[nutrientes + ["nutriscore_grade"]]
+df.columns
+```
+
+## Valores nulos
+
+Calculamos qué porcentaje de cada nutriente está vacío.
+
+```{python}
+df[nutrientes].isna().mean().sort_values().plot(kind="barh")
+plt.xlabel("Proporción de nulos")
+plt.show()
+```
+
+La fibra es la columna con más nulos: le falta a un 26 % de los productos. En el resto de nutrientes ronda el 1-2 %.
+
+Eliminamos las filas a las que les falta algún nutriente, ya que no vamos a inventarnos datos: preferimos ceñirnos a los datos ya recogidos. De esta manera es más fiable entrenar al modelo y evitamos errores.
+
+```{python}
+filas_antes = len(df)
+df = df.dropna(subset=nutrientes)
+filas_antes, len(df)
+```
+
+## Valores atípicos
+
+Con `describe()` podemos ver el mínimo y el máximo de cada nutriente, además de otros baremos.
+
+```{python}
+df.describe()
+```
+
+Observamos que hay valores sin sentido, como gramajes por encima de 100 g en alguna categoría, cuando el máximo es 100, o calorías por encima de las posibles.
+
+Ahora podemos observar en el boxplot los gramos por 100 g de cada nutriente. Dejamos fuera la energía porque va en kcal y su escala aplastaría el resto.
+
+```{python}
+nutrientes_g = [n for n in nutrientes if n != "energy-kcal_100g"]
+sns.boxplot(data=df[nutrientes_g], orient="h")
+plt.show()
+```
+
+Eliminamos los valores imposibles: ningún nutriente puede ser negativo ni pasar de 100 g por cada 100 g, y la energía no puede superar 900 kcal por 100 g (que es la de la grasa pura).
+
+```{python}
+gramos_validos = ((df[nutrientes_g] >= 0) & (df[nutrientes_g] <= 100)).all(axis=1)
+energia_valida = df["energy-kcal_100g"].between(0, 900)
+
+filas_antes = len(df)
+df = df[gramos_validos & energia_valida]
+filas_antes, len(df)
+```
+
+## Duplicados
+
+Por último comprobamos si hay productos duplicados.
+
+```{python}
+df.duplicated().sum()
+```
+
+No hay ningún duplicado, así que no hace falta eliminar nada.
+
+## Exploración de los datos limpios
+
+### Productos por letra
+
+Contamos cuántos productos quedan de cada letra.
+
+```{python}
+sns.countplot(data=df, x="nutriscore_grade", order=["a", "b", "c", "d", "e"])
+plt.show()
+```
+
+La letra c es la más frecuente (un 27 %) y la b la que menos (un 15 %). Las clases están bastante equilibradas, así que el accuracy es una métrica fiable, aunque también miraremos el F1 macro.
+
+### Distribución de cada nutriente
+
+Dibujamos un histograma de cada nutriente para ver cómo se reparten sus valores.
+
+```{python}
+df[nutrientes].hist(bins=30, figsize=(12, 8))
+plt.tight_layout()
+plt.show()
+```
+
+La energía y los hidratos están bastante repartidos, pero las grasas, las saturadas, los azúcares, la fibra y sobre todo la sal se concentran cerca de 0, con unos pocos productos con valores muy altos.
+
+La sal es el caso más extremo. Con numpy le aplicamos un logaritmo (`np.log1p`, que suma 1 antes para que el 0 no dé error) y así se ve mejor su forma.
+
+```{python}
+plt.hist(np.log1p(df["salt_100g"]), bins=30)
+plt.xlabel("log(1 + sal por 100 g)")
+plt.show()
+```
+
+Con el logaritmo se ve que la mayoría de productos tiene muy poca sal y que los muy salados son pocos.
+
+### Nutrientes según la letra
+
+Comparamos algunos nutrientes entre las cinco letras. Con `showfliers=False` ocultamos los puntos extremos para que se vean bien las cajas.
+
+```{python}
+for nutriente in ["sugars_100g", "saturated-fat_100g", "fiber_100g", "salt_100g"]:
+    sns.boxplot(data=df, x="nutriscore_grade", y=nutriente,
+                order=["a", "b", "c", "d", "e"], showfliers=False)
+    plt.show()
+```
+
+Los azúcares y las grasas saturadas suben claramente de la a a la e, y la fibra es más alta en la a. La sal no sigue el mismo patrón: la e tiene menos que la d, porque en la e hay muchos dulces, que tienen mucho azúcar y poca sal. Esto demuestra que la letra no depende de un solo nutriente, sino de la combinación de todos.
+
+### Correlaciones
+
+Calculamos la correlación entre cada par de nutrientes.
+
+```{python}
+sns.heatmap(df[nutrientes].corr(), annot=True, fmt=".2f", cmap="coolwarm")
+plt.show()
+```
+
+Las relaciones más fuertes son energía y grasas (0,80), grasas y saturadas (0,69), e hidratos y azúcares (0,50). La sal casi no se relaciona con ningún otro nutriente.
+
+## Dataset limpio
+
+Guardamos el resultado para que lo usen el modelo y los experimentos.
+
+```{python}
+df.to_csv("data/processed/productos_limpios.csv", index=False)
+df["nutriscore_grade"].value_counts().sort_index()
+```
+
+Pasamos de 9.804 a 6.354 productos. La mayoría de los que hemos quitado no tenían letra (1.099) o les faltaba algún nutriente, casi siempre la fibra (2.345). Solo 6 tenían valores imposibles.
+
+Una vez tenemos estos datos ya podemos pasar a las siguientes partes del proyecto: el modelo y los experimentos.

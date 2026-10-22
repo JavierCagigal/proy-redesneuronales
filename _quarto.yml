@@ -1,0 +1,30 @@
+project:
+  type: website
+  render:
+    - index.qmd
+    - "redes neuronales/*.qmd"
+
+execute:
+  freeze: auto
+
+website:
+  title: "Nutrición y salud con IA"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Inicio
+      - text: Redes neuronales
+        menu:
+          - href: "redes neuronales/01-eda.qmd"
+            text: "1. EDA"
+          - href: "redes neuronales/02-modelo.qmd"
+            text: "2. Modelo"
+          - href: "redes neuronales/03-experimentos.qmd"
+            text: "3. Experimentos"
+          - href: "redes neuronales/04-conclusiones.qmd"
+            text: "4. Conclusiones"
+
+format:
+  html:
+    theme: cosmo
+    toc: true
