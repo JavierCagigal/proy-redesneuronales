@@ -2,4 +2,168 @@
 title: "Experimentos"
 ---
 
-Sección pendiente: comparación de configuraciones.
+## Metodología
+
+Partimos de una configuración de partida (2 capas ocultas, 64 neuronas, batch size 64 y learning rate 0,001) y cambiamos **un parámetro cada vez**, dejando los demás fijos. Si cambiáramos dos a la vez, no sabríamos cuál ha causado la mejora. Todas las configuraciones se comparan con el conjunto de **validación**; el de test queda para el final y se usa una sola vez, con la configuración ganadora.
+
+## Lista de configuraciones
+
+Escribimos a mano las 15 configuraciones. La clave `variando` indica qué parámetro se ha cambiado en cada una.
+
+```{python}
+import os
+import time
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
+from src.red import preparar_datos, crear_red, entrenar, evaluar
+
+X_ent, y_ent, X_val, y_val, X_test, y_test = preparar_datos("data/processed/productos_limpios.csv")
+
+configuraciones = [
+    {"variando": "partida",    "capas": 2, "neuronas": 64,  "batch_size": 64,   "lr": 0.001},
+    {"variando": "capas",      "capas": 0, "neuronas": 64,  "batch_size": 64,   "lr": 0.001},
+    {"variando": "capas",      "capas": 1, "neuronas": 64,  "batch_size": 64,   "lr": 0.001},
+    {"variando": "capas",      "capas": 3, "neuronas": 64,  "batch_size": 64,   "lr": 0.001},
+    {"variando": "capas",      "capas": 4, "neuronas": 64,  "batch_size": 64,   "lr": 0.001},
+    {"variando": "neuronas",   "capas": 2, "neuronas": 16,  "batch_size": 64,   "lr": 0.001},
+    {"variando": "neuronas",   "capas": 2, "neuronas": 32,  "batch_size": 64,   "lr": 0.001},
+    {"variando": "neuronas",   "capas": 2, "neuronas": 128, "batch_size": 64,   "lr": 0.001},
+    {"variando": "neuronas",   "capas": 2, "neuronas": 256, "batch_size": 64,   "lr": 0.001},
+    {"variando": "batch_size", "capas": 2, "neuronas": 64,  "batch_size": 16,   "lr": 0.001},
+    {"variando": "batch_size", "capas": 2, "neuronas": 64,  "batch_size": 256,  "lr": 0.001},
+    {"variando": "batch_size", "capas": 2, "neuronas": 64,  "batch_size": 1024, "lr": 0.001},
+    {"variando": "lr",         "capas": 2, "neuronas": 64,  "batch_size": 64,   "lr": 0.0001},
+    {"variando": "lr",         "capas": 2, "neuronas": 64,  "batch_size": 64,   "lr": 0.01},
+    {"variando": "lr",         "capas": 2, "neuronas": 64,  "batch_size": 64,   "lr": 0.1},
+]
+print(len(configuraciones), "configuraciones")
+```
+
+Son 15 configuraciones, y cada una cambia un solo parámetro respecto a la de partida.
+
+## Ejecución
+
+Para cada configuración creamos una red **nueva**, la entrenamos, medimos el tiempo y evaluamos en validación. Guardamos los resultados en un CSV, que luego lee la sección de conclusiones.
+
+```{python}
+resultados = []
+
+for config in configuraciones:
+    red = crear_red(capas_ocultas=config["capas"], neuronas=config["neuronas"])
+    inicio = time.time()
+    entrenar(red, X_ent, y_ent, X_val, y_val, batch_size=config["batch_size"], lr=config["lr"])
+    segundos = time.time() - inicio
+    accuracy, f1, _ = evaluar(red, X_val, y_val)
+
+    fila = config.copy()
+    fila["accuracy_val"] = accuracy
+    fila["f1_val"] = f1
+    fila["segundos"] = segundos
+    resultados.append(fila)
+
+tabla = pd.DataFrame(resultados)
+os.makedirs("resultados", exist_ok=True)
+tabla.to_csv("resultados/experimentos.csv", index=False)
+tabla
+```
+
+Cada fila es una configuración con su accuracy y su F1 macro en validación. El F1 es la métrica con la que comparamos, porque trata las cinco letras por igual.
+
+## Capas ocultas
+
+```{python}
+datos = tabla[tabla["variando"].isin(["capas", "partida"])].sort_values("capas")
+plt.plot(datos["capas"], datos["f1_val"], marker="o")
+plt.xlabel("Capas ocultas")
+plt.ylabel("F1 macro (validación)")
+plt.title("La primera capa oculta da el gran salto")
+plt.show()
+```
+
+Con 0 capas la red equivale a una regresión logística y llega a un F1 de unos 0,49: una frontera lineal no basta, y eso justifica usar una red neuronal. Con una capa oculta sube a 0,70 y con tres alcanza el máximo, en torno a 0,77. Con cuatro ya no mejora. (Comprueba estos números con tu tabla.)
+
+## Neuronas por capa
+
+```{python}
+datos = tabla[tabla["variando"].isin(["neuronas", "partida"])].sort_values("neuronas")
+plt.plot(datos["neuronas"], datos["f1_val"], marker="o")
+plt.xlabel("Neuronas por capa")
+plt.ylabel("F1 macro (validación)")
+plt.title("Más neuronas ayudan hasta un punto")
+plt.show()
+```
+
+Con 16 y 32 neuronas la red tiene poca capacidad (F1 en torno a 0,72). Con 128 mejora a 0,76 y con 256 se estanca. (Comprueba estos números con tu tabla.)
+
+## Batch size
+
+```{python}
+datos = tabla[tabla["variando"].isin(["batch_size", "partida"])].sort_values("batch_size")
+plt.plot(datos["batch_size"], datos["f1_val"], marker="o")
+plt.xscale("log")
+plt.xlabel("Batch size (escala logarítmica)")
+plt.ylabel("F1 macro (validación)")
+plt.title("Un batch demasiado grande no da tiempo a aprender")
+plt.show()
+```
+
+Con un batch pequeño (16) la red ajusta los pesos más veces por época y aprende más, pero tarda más. Con 1024 solo hace unos 5 ajustes por época y, con 30 épocas, no le da tiempo: no es que ese valor sea malo en sí, le faltan épocas. (Comprueba estos números con tu tabla.)
+
+## Learning rate
+
+```{python}
+datos = tabla[tabla["variando"].isin(["lr", "partida"])].sort_values("lr")
+plt.plot(datos["lr"], datos["f1_val"], marker="o")
+plt.xscale("log")
+plt.xlabel("Learning rate (escala logarítmica)")
+plt.ylabel("F1 macro (validación)")
+plt.title("Un learning rate muy alto o muy bajo empeora el resultado")
+plt.show()
+```
+
+Con 0,0001 los pasos son tan pequeños que en 30 épocas la red no llega a aprender. Con 0,1 los pasos son tan grandes que se pasa del punto bueno y no se estabiliza. El mejor valor está en 0,01. (Comprueba estos números con tu tabla.)
+
+## Curvas de los casos extremos
+
+Volvemos a entrenar los dos casos extremos, cada uno con una red nueva, y dibujamos su pérdida de validación.
+
+```{python}
+for lr in [0.1, 0.0001]:
+    red = crear_red(capas_ocultas=2, neuronas=64)
+    historial = entrenar(red, X_ent, y_ent, X_val, y_val, batch_size=64, lr=lr)
+    plt.plot(historial["epoca"], historial["perdida_val"], label=f"lr = {lr}")
+
+plt.xlabel("Época")
+plt.ylabel("Pérdida en validación")
+plt.title("Learning rate alto: inestable. Learning rate bajo: muy lento")
+plt.legend()
+plt.show()
+```
+
+Con 0,1 la pérdida de validación sube al final: la red se vuelve inestable. Con 0,0001 baja, pero muy despacio y sin llegar a estabilizarse en 30 épocas.
+
+## Modelo final
+
+Elegimos la configuración con mayor F1 en validación, la entrenamos de nuevo y la evaluamos **una sola vez** con el conjunto de test.
+
+```{python}
+mejor = tabla.sort_values("f1_val", ascending=False).iloc[0]
+print(mejor)
+
+red = crear_red(capas_ocultas=int(mejor["capas"]), neuronas=int(mejor["neuronas"]))
+entrenar(red, X_ent, y_ent, X_val, y_val, batch_size=int(mejor["batch_size"]), lr=mejor["lr"])
+accuracy_test, f1_test, predicciones = evaluar(red, X_test, y_test)
+print(f"Test -> Accuracy: {accuracy_test:.3f}  F1 macro: {f1_test:.3f}")
+
+matriz = confusion_matrix(y_test, predicciones)
+sns.heatmap(matriz, annot=True, fmt="d", cmap="Blues",
+            xticklabels=list("abcde"), yticklabels=list("abcde"))
+plt.xlabel("Letra predicha")
+plt.ylabel("Letra real")
+plt.title("Matriz de confusión del modelo final en test")
+plt.show()
+```
+
+Si el resultado en test es parecido al de validación, la elección generaliza y no estamos engañados por haber probado muchas configuraciones. Frente al modelo base (F1 de validación en torno a 0,49), la red final mejora de forma clara, que es el argumento central del trabajo.

@@ -19,6 +19,23 @@ from src.red import preparar_datos, crear_red, entrenar, evaluar
 Este bloque importa las librerías que utilizaremos para trabajar con los datos, representar gráficos y evaluar el modelo, además de las funciones ya definidas en `src/red.py`.
 
 ```{python}
+#| echo: false
+import inspect
+from IPython.display import Markdown
+
+def mostrar_codigo(funcion):
+    # Muestra en la web el código de una función tal como está en src/red.py
+    return Markdown(f"```python\n{inspect.getsource(funcion)}```")
+```
+
+Las cuatro funciones del modelo están en `src/red.py`, porque las usan tanto esta página como la de experimentos. Para que se vea cómo están hechas, mostramos el código de cada una justo antes de utilizarla. Esta es `preparar_datos`:
+
+```{python}
+#| echo: false
+mostrar_codigo(preparar_datos)
+```
+
+```{python}
 X_ent, y_ent, X_val, y_val, X_test, y_test = preparar_datos(
     "data/processed/productos_limpios.csv"
 )
@@ -34,7 +51,12 @@ Las variables nutricionales también se escalan para trabajar con magnitudes com
 
 ## Arquitectura de la red
 
-A continuación se crea la red neuronal que utilizaremos en esta página. La configuración de partida tiene dos capas ocultas de 64 neuronas cada una. La red recibe como entrada los ocho valores nutricionales de cada producto y genera cinco valores de salida, uno por cada categoría del Nutri-Score.
+A continuación se crea la red neuronal que utilizaremos en esta página. La configuración de partida tiene dos capas ocultas de 64 neuronas cada una. La red recibe como entrada los ocho valores nutricionales de cada producto y genera cinco valores de salida, uno por cada categoría del Nutri-Score. La red se monta con `crear_red`:
+
+```{python}
+#| echo: false
+mostrar_codigo(crear_red)
+```
 
 ```{python}
 red = crear_red(capas_ocultas=2, neuronas=64)
@@ -46,13 +68,18 @@ Una neurona recibe varios valores de entrada, multiplica cada uno por un peso ap
 
 La red está formada por tres capas `Linear`. La primera recibe los 8 nutrientes de cada producto y los transforma en 64 valores, uno por cada neurona de la primera capa oculta. La segunda recibe esos 64 valores y genera otros 64, correspondientes a la segunda capa oculta.
 
-Entre las capas ocultas se utiliza la función de activación ReLU, que introduce no linealidad y permite a la red aprender relaciones más complejas. Sin estas activaciones, varias capas lineales consecutivas seguirían siendo equivalentes a una única transformación lineal.
+Después de cada capa oculta se aplica la función de activación ReLU, que introduce no linealidad y permite a la red aprender relaciones más complejas. Sin estas activaciones, varias capas lineales consecutivas seguirían siendo equivalentes a una única transformación lineal.
 
 La última capa genera 5 puntuaciones, una por cada posible letra del Nutri-Score: `a`, `b`, `c`, `d` y `e`. Estas puntuaciones se denominan *logits*. No se aplica `Softmax` al final porque la función de pérdida `CrossEntropyLoss` trabaja directamente con estos valores y realiza internamente la transformación necesaria.
 
 ## Entrenamiento
 
-Una vez creada la arquitectura, la red debe aprender a relacionar los ocho valores nutricionales de entrada con las cinco categorías del Nutri-Score. Para ello se entrena durante 30 épocas utilizando lotes de 64 productos y un *learning rate* de 0,001. Durante el entrenamiento se calcula también la pérdida sobre el conjunto de validación para comprobar cómo evoluciona el modelo con datos que no utiliza para ajustar sus pesos.
+Una vez creada la arquitectura, la red debe aprender a relacionar los ocho valores nutricionales de entrada con las cinco categorías del Nutri-Score. Para ello se entrena durante 30 épocas utilizando lotes de 64 productos y un *learning rate* de 0,001. Durante el entrenamiento se calcula también la pérdida sobre el conjunto de validación para comprobar cómo evoluciona el modelo con datos que no utiliza para ajustar sus pesos. Todo esto lo hace la función `entrenar`:
+
+```{python}
+#| echo: false
+mostrar_codigo(entrenar)
+```
 
 ```{python}
 historial = entrenar(
@@ -97,7 +124,12 @@ En las últimas épocas aparece una pequeña separación entre ambas curvas, con
 
 ## Evaluación en validación
 
-Una vez entrenada la red, evaluamos su rendimiento sobre el conjunto de validación. Estos datos no se han utilizado para ajustar los pesos del modelo, por lo que permiten comprobar hasta qué punto la red es capaz de generalizar a productos que no ha utilizado para aprender.
+Una vez entrenada la red, evaluamos su rendimiento sobre el conjunto de validación. Estos datos no se han utilizado para ajustar los pesos del modelo, por lo que permiten comprobar hasta qué punto la red es capaz de generalizar a productos que no ha utilizado para aprender. La nota la calcula `evaluar`:
+
+```{python}
+#| echo: false
+mostrar_codigo(evaluar)
+```
 
 ```{python}
 accuracy, f1_macro, predicciones = evaluar(
@@ -110,9 +142,9 @@ print(f"Accuracy: {accuracy:.3f}")
 print(f"F1 macro: {f1_macro:.3f}")
 ```
 
-El modelo obtiene una accuracy de 0,747, por lo que clasifica correctamente aproximadamente el 74,7 % de los productos del conjunto de validación.
+El modelo obtiene una accuracy de 0,746, por lo que clasifica correctamente aproximadamente el 74,6 % de los productos del conjunto de validación.
 
-El F1 macro es 0,729. Esta métrica calcula el rendimiento de cada una de las cinco clases por separado y después realiza una media dando el mismo peso a todas. Resulta útil para comprobar que el rendimiento global no se debe únicamente a las clases con más productos.
+El F1 macro es 0,728. Esta métrica calcula el rendimiento de cada una de las cinco clases por separado y después realiza una media dando el mismo peso a todas. Resulta útil para comprobar que el rendimiento global no se debe únicamente a las clases con más productos.
 
 Para analizar en qué clases se equivoca el modelo, utilizamos una matriz de confusión. Las filas representan la categoría real de cada producto y las columnas la categoría predicha por la red. Los valores de la diagonal son los aciertos, mientras que los valores fuera de ella muestran entre qué letras se producen los errores.
 
@@ -133,6 +165,6 @@ plt.title("Matriz de confusión")
 plt.show()
 ```
 
-La matriz de confusión muestra que el modelo acierta 712 de los 953 productos de validación. De los 241 errores, 188, aproximadamente un 78 %, se producen entre categorías vecinas. Esto resulta razonable porque las letras del Nutri-Score proceden de una puntuación continua que posteriormente se divide en distintos intervalos, por lo que los productos cercanos a los límites entre categorías pueden ser difíciles de distinguir.
+La matriz de confusión muestra que el modelo acierta 711 de los 953 productos de validación. De los 242 errores, 189, aproximadamente un 78 %, se producen entre categorías vecinas. Esto resulta razonable porque las letras del Nutri-Score proceden de una puntuación continua que posteriormente se divide en distintos intervalos, por lo que los productos cercanos a los límites entre categorías pueden ser difíciles de distinguir.
 
 La clase más complicada es la `b`: de sus 143 productos, la red clasifica correctamente 54, mientras que confunde 49 con la categoría `a` y 39 con la `c`. Además de ser la clase con menos ejemplos, se encuentra entre dos categorías vecinas, lo que ayuda a explicar su peor rendimiento.

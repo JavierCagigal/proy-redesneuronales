@@ -2,8 +2,23 @@
 title: "Nutrición y salud con IA"
 ---
 
-**Grupo 1:** Alejandro, Miguel y Javier.
+## Grupo 1
 
-**Tema:** nutrición y salud. En este sitio publicamos los trabajos del curso.
+*Alejandro, Miguel y Javier*
 
-**Trabajo 1:** predicción del Nutri-Score de un producto con una red neuronal, a partir de sus valores nutricionales por 100 g (datos de Open Food Facts).
+Este sitio recoge los trabajos realizados durante el curso en torno a la aplicación de inteligencia artificial al ámbito de la nutrición y la salud.
+
+## Trabajo 1: predicción del Nutri-Score
+
+El objetivo de este trabajo es construir una **red neuronal con PyTorch capaz de predecir la categoría Nutri-Score de un producto** a partir de sus valores nutricionales por 100 gramos.
+
+Para ello utilizamos datos procedentes de **Open Food Facts**. Después de limpiar y preparar el conjunto de datos, la red recibe ocho variables nutricionales de cada producto y debe clasificarlo en una de las cinco categorías posibles del Nutri-Score: `a`, `b`, `c`, `d` o `e`.
+
+A lo largo del trabajo analizamos los datos, construimos y entrenamos una primera red neuronal, probamos distintas configuraciones y evaluamos finalmente el rendimiento del modelo.
+
+### Contenido
+
+- **Análisis exploratorio:** estudio y preparación de los datos.
+- **Modelo:** construcción, entrenamiento y evaluación de una red neuronal de referencia.
+- **Experimentos:** comparación de distintas arquitecturas y parámetros de entrenamiento.
+- **Resultados:** evaluación final del modelo seleccionado.
